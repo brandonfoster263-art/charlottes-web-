@@ -75,7 +75,7 @@ body::after{
   height:min(78vh, 620px);
   transform-style:preserve-3d;
   transform:rotateX(8deg);
-  transition:transform 1s ease;
+  transition:transform 1s ease, width .3s ease, height .3s ease;
 }
 
 /* ---------- Title banner above book ---------- */
@@ -98,8 +98,9 @@ body::after{
   position:absolute;
   left:50%;
   top:50%;
-  width:46%;
-  height:88%;
+  width:clamp(190px, 36vw, 420px);
+  aspect-ratio:0.72;
+  max-height:80vh;
   transform:translate(-50%,-50%) rotateX(6deg) rotateY(-4deg) rotateZ(-1deg);
   transform-style:preserve-3d;
   transition:opacity .5s ease;
@@ -418,8 +419,94 @@ body::after{
   text-align:center;
 }
 
-@media (max-width:680px){
-  #open-spread{flex-direction:row;}
-  .page-text{font-size:16px;}
-  .illustration svg{max-height:30vh;}
+/* ---------- Narrow / portrait phones: stack pages instead of side-by-side ---------- */
+@media (max-width:700px){
+  #site-title{font-size:16px;top:1.2vh;}
+
+  #book-wrap{
+    width:min(86vw, 420px);
+    height:auto;
+    aspect-ratio:0.46;
+    max-height:84vh;
+  }
+
+  #open-spread{flex-direction:column;}
+
+  .board{
+    flex:0 0 12px;
+    width:100%;
+  }
+  .board.left{border-radius:8px 8px 0 0;}
+  .board.right{border-radius:0 0 8px 8px;}
+
+  #pages-area{flex-direction:column;}
+
+  #pages-area::before{
+    left:0;
+    right:0;
+    top:50%;
+    bottom:auto;
+    width:auto;
+    height:34px;
+    transform:translateY(-50%);
+    background:linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0) 20%, rgba(0,0,0,0) 80%, rgba(0,0,0,0.18));
+  }
+
+  .page{
+    flex:1 1 50%;
+    width:100%;
+    padding:3% 6%;
+  }
+
+  .illustration svg{max-height:24vh;}
+
+  .page-text{
+    font-size:clamp(14px, 3.6vw, 18px);
+    line-height:1.45;
+    text-align:center;
+  }
+
+  .page-text.centered{font-size:clamp(18px,5vw,26px);}
+
+  .page-number{font-size:11px;}
+
+  #controls{
+    gap:8px;
+    bottom:1vh;
+    width:94vw;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .ctrl-btn{font-size:13px;padding:.5em .85em;}
+  #page-indicator{font-size:12px;min-width:56px;}
+
+  /* vertical page-turn (top-over-bottom) replaces the horizontal flip */
+  .leaf.leaf-vertical{
+    left:0;
+    width:100%;
+  }
+  .leaf.leaf-vertical.to-right{
+    top:50%;
+    bottom:0;
+    height:50%;
+    transform-origin:top center;
+  }
+  .leaf.leaf-vertical.to-left{
+    top:0;
+    bottom:50%;
+    height:50%;
+    transform-origin:bottom center;
+  }
+  .leaf.leaf-vertical .leaf-face.back{transform:rotateX(180deg);}
+  .leaf.leaf-vertical.playing-fwd{animation:flip-forward-v .9s cubic-bezier(.45,.05,.55,.95) forwards;}
+  .leaf.leaf-vertical.playing-bwd{animation:flip-backward-v .9s cubic-bezier(.45,.05,.55,.95) forwards;}
+}
+
+@keyframes flip-forward-v{
+  from{transform:rotateX(0deg);}
+  to{transform:rotateX(-180deg);}
+}
+@keyframes flip-backward-v{
+  from{transform:rotateX(0deg);}
+  to{transform:rotateX(180deg);}
 }

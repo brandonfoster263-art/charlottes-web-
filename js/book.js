@@ -57,8 +57,9 @@
     flipping = true;
     reader.stop();
 
+    const stacked = window.matchMedia('(max-width: 700px)').matches;
     const leaf = document.createElement('div');
-    leaf.className = `leaf ${direction === 1 ? 'to-right' : 'to-left'}`;
+    leaf.className = `leaf ${direction === 1 ? 'to-right' : 'to-left'}${stacked ? ' leaf-vertical' : ''}`;
     const frontPage = direction === 1 ? pages[current + 1] : pages[current];
     const backPage = direction === 1 ? (pages[current + 2] || pages[current + 1]) : (pages[current - 1] || pages[current]);
     leaf.innerHTML = `
