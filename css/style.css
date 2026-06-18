@@ -142,6 +142,47 @@ html,body{
 }
 #glossary-hint.visible{opacity:1;}
 
+/* ---------- magic wand hint & cast button ---------- */
+#wand-hint{
+  position:absolute;
+  top:12vh;
+  left:3vw;
+  max-width:46vw;
+  color:#fff3d6;
+  background:rgba(0,0,0,0.28);
+  padding:.35em 1em;
+  border-radius:999px;
+  font-size:clamp(11px,1.6vw,14px);
+  z-index:6;
+  opacity:1;
+  pointer-events:none;
+  transition:opacity .6s ease;
+}
+#wand-hint.hidden{opacity:0;}
+
+#wand-cast-btn{
+  position:absolute;
+  right:4vw;
+  bottom:9%;
+  z-index:40;
+  font-family:'Baloo 2','Comic Sans MS',cursive;
+  font-size:clamp(15px,2vw,20px);
+  border:none;
+  border-radius:999px;
+  padding:.6em 1.3em;
+  cursor:pointer;
+  background:linear-gradient(180deg,#fff0c2,#ffd86b);
+  color:#5a3d00;
+  box-shadow:0 6px 0 #b8860b, 0 10px 18px rgba(0,0,0,0.4);
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(10px) scale(.9);
+  transition:opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+  animation:btn-bob 1.8s ease-in-out infinite;
+}
+#wand-cast-btn.visible{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);}
+#wand-cast-btn:active{transform:translateY(3px) scale(.95);}
+
 /* ---------- glossary word popup ---------- */
 #word-popup{
   position:fixed;
@@ -264,4 +305,6 @@ html,body{
   #controls{gap:8px;bottom:1vh;width:94vw;}
   .ctrl-btn{font-size:13px;padding:.5em .85em;}
   #page-indicator{font-size:12px;min-width:56px;}
+  #wand-hint{font-size:11px;top:9vh;}
+  #wand-cast-btn{font-size:13px;padding:.5em .9em;right:3vw;bottom:13%;}
 }

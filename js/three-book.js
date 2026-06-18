@@ -42,6 +42,8 @@ const wordPopupClose = document.getElementById('word-popup-close');
 const wordPopupIcon = document.getElementById('word-popup-icon');
 const wordPopupWord = document.getElementById('word-popup-word');
 const wordPopupDef = document.getElementById('word-popup-def');
+const wandHint = document.getElementById('wand-hint');
+const wandCastBtn = document.getElementById('wand-cast-btn');
 
 // ---------------- renderer / scene / camera ----------------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -121,6 +123,145 @@ const table = new THREE.Mesh(
 table.rotation.x = -Math.PI / 2;
 table.receiveShadow = true;
 scene.add(table);
+
+// ---------------- magic wand ----------------
+function makeStarShape(outerR, innerR, points) {
+  const shape = new THREE.Shape();
+  const step = Math.PI / points;
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = i * step - Math.PI / 2;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  return shape;
+}
+
+const wandGroup = new THREE.Group();
+const wandRestPosition = new THREE.Vector3(-3.3, 0.07, 1.4);
+const wandRestRotation = new THREE.Euler(Math.PI / 2, 0.55, 0.3);
+wandGroup.position.copy(wandRestPosition);
+wandGroup.rotation.copy(wandRestRotation);
+scene.add(wandGroup);
+
+const wandHandle = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.035, 0.05, 1.3, 14),
+  new THREE.MeshStandardMaterial({ color: '#5c3a22', roughness: 0.6, metalness: 0.1 }),
+);
+wandHandle.position.y = 0.65;
+wandHandle.castShadow = true;
+wandGroup.add(wandHandle);
+
+const starGeo = new THREE.ExtrudeGeometry(makeStarShape(0.2, 0.08, 5), {
+  depth: 0.05, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2,
+});
+starGeo.center();
+const wandStar = new THREE.Mesh(
+  starGeo,
+  new THREE.MeshStandardMaterial({ color: '#ffe17a', emissive: '#ffb800', emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.4 }),
+);
+wandStar.position.set(0, 1.35, 0);
+wandStar.castShadow = true;
+wandGroup.add(wandStar);
+
+[0.18, 1.0].forEach((y) => {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.058, 0.012, 8, 16),
+    new THREE.MeshStandardMaterial({ color: GOLD, metalness: 0.6, roughness: 0.3 }),
+  );
+  ring.position.y = y;
+  ring.rotation.x = Math.PI / 2;
+  wandGroup.add(ring);
+});
+
+const wandTipMarker = new THREE.Object3D();
+wandTipMarker.position.set(0, 1.42, 0);
+wandGroup.add(wandTipMarker);
+
+const wandGlow = new THREE.PointLight('#ffe17a', 0.35, 1.6);
+wandGlow.position.copy(wandTipMarker.position);
+wandGroup.add(wandGlow);
+
+function makeSparkleTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,230,150,0.9)');
+  grad.addColorStop(1, 'rgba(255,230,150,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const sparkleTexture = makeSparkleTexture();
+const activeBursts = [];
+
+function spawnSparkleBurst(origin) {
+  const count = 46;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const velocities = [];
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = origin.x;
+    positions[i * 3 + 1] = origin.y;
+    positions[i * 3 + 2] = origin.z;
+    const color = new THREE.Color(RAINBOW[i % RAINBOW.length]);
+    colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+    const speed = 0.8 + Math.random() * 1.6;
+    velocities.push(new THREE.Vector3(
+      Math.sin(phi) * Math.cos(theta) * speed,
+      Math.abs(Math.cos(phi)) * speed + 0.6,
+      Math.sin(phi) * Math.sin(theta) * speed,
+    ));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    size: 0.16,
+    map: sparkleTexture,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  activeBursts.push({ points, velocities, age: 0, duration: 1.1 });
+  wandGlow.intensity = 2.2;
+}
+
+function updateSparkleBursts(dt) {
+  for (let i = activeBursts.length - 1; i >= 0; i--) {
+    const burst = activeBursts[i];
+    burst.age += dt;
+    const t = burst.age / burst.duration;
+    if (t >= 1) {
+      scene.remove(burst.points);
+      burst.points.geometry.dispose();
+      burst.points.material.dispose();
+      activeBursts.splice(i, 1);
+      continue;
+    }
+    const posAttr = burst.points.geometry.attributes.position;
+    for (let p = 0; p < burst.velocities.length; p++) {
+      const v = burst.velocities[p];
+      v.y -= dt * 1.4;
+      posAttr.array[p * 3] += v.x * dt;
+      posAttr.array[p * 3 + 1] += v.y * dt;
+      posAttr.array[p * 3 + 2] += v.z * dt;
+    }
+    posAttr.needsUpdate = true;
+    burst.points.material.opacity = 1 - t;
+  }
+  if (wandGlow.intensity > 0.35) {
+    wandGlow.intensity = THREE.MathUtils.lerp(wandGlow.intensity, 0.35, 0.05);
+  }
+}
 
 // ---------------- shared side / spine textures ----------------
 function makePageEdgeTexture() {
@@ -499,12 +640,108 @@ function findGlossaryEntryAt(clientX, clientY) {
   return null;
 }
 
+// ---------------- magic wand interaction ----------------
+let wandHeld = false;
+let wandAnimating = false;
+const wandTargetPos = new THREE.Vector3();
+const wandFollowPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.3);
+const wandPickRaycaster = new THREE.Raycaster();
+const wandMoveRaycaster = new THREE.Raycaster();
+const wandNDC = new THREE.Vector2();
+const wandPlaneHit = new THREE.Vector3();
+
+function isWandClicked(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  wandNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  wandNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  wandPickRaycaster.setFromCamera(wandNDC, camera);
+  return wandPickRaycaster.intersectObjects(wandGroup.children, true).length > 0;
+}
+
+function updateWandTarget(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  wandNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  wandNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  wandMoveRaycaster.setFromCamera(wandNDC, camera);
+  if (wandMoveRaycaster.ray.intersectPlane(wandFollowPlane, wandPlaneHit)) {
+    wandTargetPos.set(wandPlaneHit.x, 1.3, wandPlaneHit.z);
+  }
+}
+
+function pickUpWand(clientX, clientY) {
+  if (wandHeld) return;
+  wandHeld = true;
+  orbit.enabled = false;
+  wandCastBtn.classList.add('visible');
+  wandHint.classList.add('hidden');
+
+  updateWandTarget(clientX, clientY);
+  const startPos = wandGroup.position.clone();
+  const startRot = wandGroup.rotation.clone();
+  const heldRot = new THREE.Euler(0.12, 0, -0.08);
+  wandAnimating = true;
+  tween(500, (t) => {
+    wandGroup.position.set(
+      THREE.MathUtils.lerp(startPos.x, wandTargetPos.x, t),
+      THREE.MathUtils.lerp(startPos.y, 1.3, t),
+      THREE.MathUtils.lerp(startPos.z, wandTargetPos.z, t),
+    );
+    wandGroup.rotation.set(
+      THREE.MathUtils.lerp(startRot.x, heldRot.x, t),
+      THREE.MathUtils.lerp(startRot.y, heldRot.y, t),
+      THREE.MathUtils.lerp(startRot.z, heldRot.z, t),
+    );
+  }).then(() => { wandAnimating = false; });
+}
+
+function putDownWand() {
+  if (!wandHeld) return;
+  wandHeld = false;
+  orbit.enabled = true;
+  wandCastBtn.classList.remove('visible');
+
+  const startPos = wandGroup.position.clone();
+  const startRot = wandGroup.rotation.clone();
+  wandAnimating = true;
+  tween(500, (t) => {
+    wandGroup.position.set(
+      THREE.MathUtils.lerp(startPos.x, wandRestPosition.x, t),
+      THREE.MathUtils.lerp(startPos.y, wandRestPosition.y, t),
+      THREE.MathUtils.lerp(startPos.z, wandRestPosition.z, t),
+    );
+    wandGroup.rotation.set(
+      THREE.MathUtils.lerp(startRot.x, wandRestRotation.x, t),
+      THREE.MathUtils.lerp(startRot.y, wandRestRotation.y, t),
+      THREE.MathUtils.lerp(startRot.z, wandRestRotation.z, t),
+    );
+  }).then(() => { wandAnimating = false; });
+}
+
+wandCastBtn.addEventListener('click', () => {
+  if (!wandHeld) return;
+  const tip = new THREE.Vector3();
+  wandTipMarker.getWorldPosition(tip);
+  spawnSparkleBurst(tip);
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (wandHeld && !wandAnimating) updateWandTarget(e.clientX, e.clientY);
+});
+
 canvas.addEventListener('pointerdown', (e) => { pointerDownPos = { x: e.clientX, y: e.clientY }; });
 canvas.addEventListener('pointerup', (e) => {
   if (!pointerDownPos) return;
   const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
   pointerDownPos = null;
   if (dist > 6) return;
+  if (!wandHeld && isWandClicked(e.clientX, e.clientY)) {
+    pickUpWand(e.clientX, e.clientY);
+    return;
+  }
+  if (wandHeld) {
+    putDownWand();
+    return;
+  }
   const entry = findGlossaryEntryAt(e.clientX, e.clientY);
   if (entry) showGlossaryPopup(entry);
 });
@@ -608,9 +845,15 @@ function onResize() {
 window.addEventListener('resize', onResize);
 onResize();
 
+let lastFrameTime = performance.now();
 function animate() {
   requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+  lastFrameTime = now;
   orbit.update();
+  if (wandHeld && !wandAnimating) wandGroup.position.lerp(wandTargetPos, 0.22);
+  updateSparkleBursts(dt);
   renderer.render(scene, camera);
 }
 animate();
