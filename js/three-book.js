@@ -36,6 +36,12 @@ const nextBtn = document.getElementById('next-btn');
 const readBtn = document.getElementById('read-btn');
 const indicator = document.getElementById('page-indicator');
 const dot = document.getElementById('read-dot');
+const glossaryHint = document.getElementById('glossary-hint');
+const wordPopup = document.getElementById('word-popup');
+const wordPopupClose = document.getElementById('word-popup-close');
+const wordPopupIcon = document.getElementById('word-popup-icon');
+const wordPopupWord = document.getElementById('word-popup-word');
+const wordPopupDef = document.getElementById('word-popup-def');
 
 // ---------------- renderer / scene / camera ----------------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -242,6 +248,20 @@ async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, c
       let x = centered ? (W - lineWidth) / 2 : margin;
       line.forEach((w) => {
         const isActive = wordCounter === highlightIndex;
+        const glossaryMatch = window.WordGlossary && window.WordGlossary.lookup(w.word);
+        if (glossaryMatch) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(135,206,250,0.28)';
+          ctx.fillRect(x - 4, y - fontSize * 0.92, w.width + 8, fontSize * 1.05);
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = '#2f8fd0';
+          ctx.lineWidth = Math.max(2, fontSize * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(x, y + fontSize * 0.14);
+          ctx.lineTo(x + w.width, y + fontSize * 0.14);
+          ctx.stroke();
+          ctx.restore();
+        }
         if (isActive) {
           ctx.fillStyle = '#ffe17a';
           ctx.fillRect(x - 6, y - fontSize * 1.05, w.width + 12, fontSize * 1.3);
@@ -249,7 +269,7 @@ async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, c
         ctx.fillStyle = isActive ? '#5a3d00' : RAINBOW[wordCounter % RAINBOW.length];
         ctx.font = font;
         ctx.fillText(w.word, x, y);
-        wordRects.push({ x, y: y - fontSize * 1.05, w: w.width, h: fontSize * 1.3 });
+        wordRects.push({ x, y: y - fontSize * 1.05, w: w.width, h: fontSize * 1.3, glossary: glossaryMatch || null });
         x += w.width + spaceWidth;
         wordCounter++;
       });
@@ -437,6 +457,58 @@ function toggleRead() {
   window.speechSynthesis.speak(utter);
 }
 
+// ---------------- glossary popup ----------------
+function showGlossaryPopup(entry) {
+  stopReading();
+  wordPopupIcon.innerHTML = entry.icon;
+  wordPopupWord.textContent = entry.key;
+  wordPopupDef.textContent = entry.definition;
+  wordPopup.classList.remove('hidden');
+  wordPopup.classList.add('shown');
+}
+function hideGlossaryPopup() {
+  wordPopup.classList.remove('shown');
+}
+wordPopupClose.addEventListener('click', hideGlossaryPopup);
+wordPopup.addEventListener('click', (e) => { if (e.target === wordPopup) hideGlossaryPopup(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideGlossaryPopup(); });
+
+const glossaryRaycaster = new THREE.Raycaster();
+const glossaryPointerNDC = new THREE.Vector2();
+const rightPagePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -RIGHT_SURFACE_Y);
+const glossaryPlaneHit = new THREE.Vector3();
+let pointerDownPos = null;
+
+function findGlossaryEntryAt(clientX, clientY) {
+  if (!opened || flipping) return null;
+  const rect = canvas.getBoundingClientRect();
+  glossaryPointerNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  glossaryPointerNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  glossaryRaycaster.setFromCamera(glossaryPointerNDC, camera);
+  if (!glossaryRaycaster.ray.intersectPlane(rightPagePlane, glossaryPlaneHit)) return null;
+  const fracX = (glossaryPlaneHit.x - closedBook.position.x) / BOOK_W + 0.5;
+  const fracZ = glossaryPlaneHit.z / BOOK_D + 0.5;
+  if (fracX < 0 || fracX > 1 || fracZ < 0 || fracZ > 1) return null;
+  const px = fracX * TEX_W;
+  const py = fracZ * TEX_H;
+  for (const wr of rightSlot.wordRects) {
+    if (wr.glossary && px >= wr.x && px <= wr.x + wr.w && py >= wr.y && py <= wr.y + wr.h) {
+      return wr.glossary;
+    }
+  }
+  return null;
+}
+
+canvas.addEventListener('pointerdown', (e) => { pointerDownPos = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!pointerDownPos) return;
+  const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+  pointerDownPos = null;
+  if (dist > 6) return;
+  const entry = findGlossaryEntryAt(e.clientX, e.clientY);
+  if (entry) showGlossaryPopup(entry);
+});
+
 // ---------------- open / flip ----------------
 async function openBook() {
   if (opened) return;
@@ -451,6 +523,8 @@ async function openBook() {
   });
 
   controlsEl.classList.add('visible');
+  glossaryHint.classList.add('visible');
+  setTimeout(() => glossaryHint.classList.remove('visible'), 7000);
   updateIndicator();
 }
 

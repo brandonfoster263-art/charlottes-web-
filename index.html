@@ -24,6 +24,8 @@
     <button id="open-btn">Open the Book ✨</button>
   </div>
 
+  <div id="glossary-hint">✨ Tap a glowing word to find out what it means!</div>
+
   <div id="controls">
     <button class="ctrl-btn" id="prev-btn">⟵ Prev</button>
     <button class="ctrl-btn" id="read-btn">🔊 Read to me</button>
@@ -33,8 +35,18 @@
 
   <div id="read-dot"></div>
 
+  <div id="word-popup" class="hidden">
+    <div id="word-popup-card">
+      <button id="word-popup-close" aria-label="Close">&times;</button>
+      <div id="word-popup-icon"></div>
+      <div id="word-popup-word"></div>
+      <div id="word-popup-def"></div>
+    </div>
+  </div>
+
   <script src="js/illustrations.js"></script>
   <script src="js/book-data.js"></script>
+  <script src="js/glossary.js"></script>
   <script type="module" src="js/three-book.js"></script>
 </body>
 </html>
