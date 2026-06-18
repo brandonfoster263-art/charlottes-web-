@@ -8,47 +8,33 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./js/vendor/three/build/three.module.min.js"
+  }
+}
+</script>
 </head>
 <body>
   <div id="table-scene">
     <div id="site-title">Charlotte's Web</div>
+    <div id="drag-hint">Drag to spin the book around &middot; scroll to zoom</div>
+    <canvas id="book-canvas"></canvas>
+    <button id="open-btn">Open the Book ✨</button>
+  </div>
 
-    <div id="book-wrap">
-      <!-- Closed hardcover book -->
-      <div id="closed-book">
-        <div class="cover-front">
-          <div class="cover-art"></div>
-        </div>
-        <div class="cover-spine"></div>
-        <div class="page-edges"></div>
-      </div>
-
-      <!-- Open spread, hardcover boards always visible at the outer edges -->
-      <div id="open-spread">
-        <div class="board left"></div>
-        <div id="pages-area">
-          <div class="page page-left" id="page-left"></div>
-          <div class="page page-right" id="page-right"></div>
-        </div>
-        <div class="board right"></div>
-      </div>
-
-      <button id="open-btn">Open the Book ✨</button>
-    </div>
-
-    <div id="controls">
-      <button class="ctrl-btn" id="prev-btn">⟵ Prev</button>
-      <button class="ctrl-btn" id="read-btn">🔊 Read to me</button>
-      <span id="page-indicator">1-2 / 18</span>
-      <button class="ctrl-btn" id="next-btn">Next ⟶</button>
-    </div>
+  <div id="controls">
+    <button class="ctrl-btn" id="prev-btn">⟵ Prev</button>
+    <button class="ctrl-btn" id="read-btn">🔊 Read to me</button>
+    <span id="page-indicator">1-2 / 18</span>
+    <button class="ctrl-btn" id="next-btn">Next ⟶</button>
   </div>
 
   <div id="read-dot"></div>
 
   <script src="js/illustrations.js"></script>
   <script src="js/book-data.js"></script>
-  <script src="js/reader.js"></script>
-  <script src="js/book.js"></script>
+  <script type="module" src="js/three-book.js"></script>
 </body>
 </html>
