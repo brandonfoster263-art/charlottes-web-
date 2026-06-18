@@ -58,8 +58,16 @@
     reader.stop();
 
     const stacked = window.matchMedia('(max-width: 700px)').matches;
+    if (stacked) {
+      flipStacked(direction);
+    } else {
+      flipDesktop(direction);
+    }
+  }
+
+  function flipDesktop(direction) {
     const leaf = document.createElement('div');
-    leaf.className = `leaf ${direction === 1 ? 'to-right' : 'to-left'}${stacked ? ' leaf-vertical' : ''}`;
+    leaf.className = `leaf ${direction === 1 ? 'to-right' : 'to-left'}`;
     const frontPage = direction === 1 ? pages[current + 1] : pages[current];
     const backPage = direction === 1 ? (pages[current + 2] || pages[current + 1]) : (pages[current - 1] || pages[current]);
     leaf.innerHTML = `
@@ -88,16 +96,55 @@
     });
   }
 
+  function flipStacked(direction) {
+    // Portrait phones use a flat peel-away leaf instead of a true 3D flip
+    // (see css comment), so the underlying content can swap immediately
+    // and the leaf just shows the outgoing page on top while it shrinks away.
+    const outgoingPage = direction === 1 ? pages[current + 1] : pages[current];
+    const leaf = document.createElement('div');
+    leaf.className = `leaf leaf-vertical ${direction === 1 ? 'to-right' : 'to-left'}`;
+    leaf.innerHTML = `<div class="leaf-face front">${pageMarkup('right', outgoingPage, '')}</div>`;
+    if (direction === 1) {
+      els.pagesArea.appendChild(leaf);
+    } else {
+      els.pagesArea.insertBefore(leaf, els.pagesArea.firstChild);
+    }
+
+    current = direction === 1 ? current + 2 : current - 2;
+    if (current < 0) current = 0;
+    render();
+
+    requestAnimationFrame(() => {
+      leaf.classList.add(direction === 1 ? 'playing-fwd' : 'playing-bwd');
+    });
+
+    leaf.addEventListener('animationend', () => {
+      leaf.remove();
+      flipping = false;
+    });
+  }
+
   function openBook() {
-    els.coverFront.style.transform = 'rotateY(-155deg)';
-    els.openBtn.classList.add('hidden');
-    els.bookWrap.style.transform = 'rotateX(4deg)';
-    setTimeout(() => {
+    let revealed = false;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
       els.closedBook.classList.add('hidden');
       els.spread.classList.add('visible');
       els.controls.classList.add('visible');
       render();
-    }, 1050);
+    };
+
+    els.coverFront.addEventListener('transitionend', (e) => {
+      if (e.propertyName === 'transform') reveal();
+    }, { once: true });
+    // Safety net in case the transitionend event is missed (e.g. the
+    // element is hidden mid-transition on some mobile browsers).
+    setTimeout(reveal, 1300);
+
+    els.coverFront.style.transform = 'rotateY(-155deg)';
+    els.openBtn.classList.add('hidden');
+    els.bookWrap.style.transform = 'rotateX(4deg)';
   }
 
   function toggleRead() {
