@@ -643,8 +643,8 @@ function findGlossaryEntryAt(clientX, clientY) {
 // ---------------- magic wand interaction ----------------
 const WAND_HOLD_Y = 1.05;
 let wandHeld = false;
-let wandAnimating = false;
 let isPointerDown = false;
+let wandDragging = false;
 let wandTime = 0;
 const wandTargetPos = wandRestPosition.clone();
 const wandFollowPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WAND_HOLD_Y);
@@ -674,7 +674,6 @@ function updateWandTarget(clientX, clientY) {
 function pickUpWand() {
   if (wandHeld) return;
   wandHeld = true;
-  orbit.enabled = false;
   wandCastBtn.classList.add('visible');
   wandHint.classList.add('hidden');
   tween(220, (t) => {
@@ -685,25 +684,7 @@ function pickUpWand() {
 function putDownWand() {
   if (!wandHeld) return;
   wandHeld = false;
-  orbit.enabled = true;
   wandCastBtn.classList.remove('visible');
-
-  const startPos = wandTargetPos.clone();
-  const startRot = wandGroup.rotation.clone();
-  wandAnimating = true;
-  tween(500, (t) => {
-    wandTargetPos.set(
-      THREE.MathUtils.lerp(startPos.x, wandRestPosition.x, t),
-      THREE.MathUtils.lerp(startPos.y, wandRestPosition.y, t),
-      THREE.MathUtils.lerp(startPos.z, wandRestPosition.z, t),
-    );
-    wandGroup.position.copy(wandTargetPos);
-    wandGroup.rotation.set(
-      THREE.MathUtils.lerp(startRot.x, wandRestRotation.x, t),
-      THREE.MathUtils.lerp(startRot.y, wandRestRotation.y, t),
-      THREE.MathUtils.lerp(startRot.z, wandRestRotation.z, t),
-    );
-  }).then(() => { wandAnimating = false; });
 }
 
 wandCastBtn.addEventListener('click', () => {
@@ -713,20 +694,25 @@ wandCastBtn.addEventListener('click', () => {
   spawnSparkleBurst(tip);
 });
 
-// Wand only moves while you press-and-drag (not on hover), so moving the
-// pointer to click Next/Prev or other UI never disturbs it, and camera
-// orbit (also drag-based) stays independent since it targets a different
-// gesture state (wandHeld) rather than fighting over the same listeners.
+// Wand only moves while you press-and-drag starting directly on it, so
+// hovering toward Next/Prev/Cast never disturbs it, and dragging anywhere
+// else still orbits the camera even while the wand is held.
 canvas.addEventListener('pointermove', (e) => {
-  if (isPointerDown && wandHeld && !wandAnimating) updateWandTarget(e.clientX, e.clientY);
+  if (isPointerDown && wandDragging) updateWandTarget(e.clientX, e.clientY);
 });
 
 canvas.addEventListener('pointerdown', (e) => {
   pointerDownPos = { x: e.clientX, y: e.clientY };
   isPointerDown = true;
+  wandDragging = wandHeld && isWandClicked(e.clientX, e.clientY);
+  if (wandDragging) orbit.enabled = false;
 });
 canvas.addEventListener('pointerup', (e) => {
   isPointerDown = false;
+  if (wandDragging) {
+    wandDragging = false;
+    orbit.enabled = true;
+  }
   if (!pointerDownPos) return;
   const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
   pointerDownPos = null;
@@ -849,19 +835,17 @@ function animate() {
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
   orbit.update();
-  if (!wandAnimating) {
-    wandTime += dt;
-    const bob = Math.sin(wandTime * 1.6) * 0.05;
-    wandGroup.position.set(wandTargetPos.x, wandTargetPos.y + bob, wandTargetPos.z);
-    if (wandHeld) {
-      wandGroup.rotation.set(0.12, wandGroup.rotation.y, -0.08);
-    } else {
-      wandGroup.rotation.set(
-        wandRestRotation.x,
-        wandRestRotation.y + Math.sin(wandTime * 0.6) * 0.18,
-        wandRestRotation.z,
-      );
-    }
+  wandTime += dt;
+  const bob = Math.sin(wandTime * 1.6) * 0.05;
+  wandGroup.position.set(wandTargetPos.x, wandTargetPos.y + bob, wandTargetPos.z);
+  if (wandHeld) {
+    wandGroup.rotation.set(0.12, wandGroup.rotation.y, -0.08);
+  } else {
+    wandGroup.rotation.set(
+      wandRestRotation.x,
+      wandRestRotation.y + Math.sin(wandTime * 0.6) * 0.18,
+      wandRestRotation.z,
+    );
   }
   updateSparkleBursts(dt);
   renderer.render(scene, camera);
