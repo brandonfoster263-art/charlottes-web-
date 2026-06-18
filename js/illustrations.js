@@ -245,6 +245,33 @@ function ribbon(x, y, scale = 1) {
   </g>`;
 }
 
+function cloud(x, y, scale = 1) {
+  return `
+  <g transform="translate(${x},${y}) scale(${scale})">
+    <ellipse cx="0" cy="0" rx="34" ry="16" fill="#fff" opacity="0.85"/>
+    <ellipse cx="-22" cy="6" rx="20" ry="12" fill="#fff" opacity="0.85"/>
+    <ellipse cx="24" cy="6" rx="22" ry="13" fill="#fff" opacity="0.85"/>
+  </g>`;
+}
+
+function appleTree(x, y, scale = 1) {
+  return `
+  <g transform="translate(${x},${y}) scale(${scale})">
+    <rect x="-8" y="40" width="16" height="50" fill="#7a4e2a"/>
+    <circle cx="0" cy="10" r="48" fill="#6fa23f"/>
+    <circle cx="-20" cy="20" r="4" fill="#c23b3b"/>
+    <circle cx="18" cy="-4" r="4" fill="#c23b3b"/>
+    <circle cx="6" cy="30" r="4" fill="#c23b3b"/>
+  </g>`;
+}
+
+function snowfall() {
+  let flakes = '';
+  const pos = [[40,40],[120,90],[200,30],[300,70],[380,20],[460,100],[520,50],[80,140],[260,120],[440,150]];
+  pos.forEach(([x, y]) => { flakes += `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff" opacity="0.9"/>`; });
+  return flakes;
+}
+
 function heart(x, y, scale = 1, color = '#e0556b') {
   return `<path d="M${x},${y + 8 * scale} C${x - 14 * scale},${y - 8 * scale} ${x - 26 * scale},${y + 10 * scale} ${x},${y + 26 * scale} C${x + 26 * scale},${y + 10 * scale} ${x + 14 * scale},${y - 8 * scale} ${x},${y + 8 * scale} Z" fill="${color}"/>`;
 }
@@ -252,5 +279,5 @@ function heart(x, y, scale = 1, color = '#e0556b') {
 window.Illustrations = {
   svgWrap, defsBlock, sky, sun, moonStars, grassHill, fenceRow, barn, farmhouse,
   pigWilbur, spiderCharlotte, girlFern, farmerZuckerman, goose, sheep, rat,
-  webCircle, eggSac, babySpiders, fairTent, ribbon, heart,
+  webCircle, eggSac, babySpiders, fairTent, ribbon, heart, cloud, appleTree, snowfall,
 };

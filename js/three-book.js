@@ -445,8 +445,8 @@ async function openBook() {
   dragHint.classList.add('hidden');
 
   await tween(1100, (t) => {
-    flapPivot.rotation.z = -Math.PI * t;
-    flapPivot.position.y = THREE.MathUtils.lerp(BOOK_T - COVER_T, COVER_T, t);
+    flapPivot.rotation.z = Math.PI * t;
+    flapPivot.position.y = THREE.MathUtils.lerp(BOOK_T - COVER_T, COVER_T, t) + Math.sin(Math.PI * t) * 0.55;
     closedBook.position.x = THREE.MathUtils.lerp(0, BOOK_W / 2, t);
   });
 
@@ -472,7 +472,7 @@ async function flip(direction) {
     boardLocalX = BOOK_W / 2;
     yStart = RIGHT_SURFACE_Y;
     yEnd = LEFT_SURFACE_Y + COVER_T;
-    endRot = -Math.PI;
+    endRot = Math.PI;
     await Promise.all([
       frontSlot.setPage(PAGES[current + 1], true),
       backSlot.setPage(PAGES[current + 2] ?? PAGES[current + 1], false),
@@ -481,7 +481,7 @@ async function flip(direction) {
     boardLocalX = -BOOK_W / 2;
     yStart = LEFT_SURFACE_Y;
     yEnd = RIGHT_SURFACE_Y + COVER_T;
-    endRot = Math.PI;
+    endRot = -Math.PI;
     await Promise.all([
       frontSlot.setPage(PAGES[current], false),
       backSlot.setPage(PAGES[current - 1] ?? PAGES[current], true),
@@ -497,9 +497,9 @@ async function flip(direction) {
   pivot.position.set(0, yStart, 0);
   pivot.add(board);
 
-  await tween(900, (t) => {
+  await tween(950, (t) => {
     pivot.rotation.z = endRot * t;
-    pivot.position.y = THREE.MathUtils.lerp(yStart, yEnd, t);
+    pivot.position.y = THREE.MathUtils.lerp(yStart, yEnd, t) + Math.sin(Math.PI * t) * 0.45;
   });
 
   current = direction === 1 ? current + 2 : current - 2;
