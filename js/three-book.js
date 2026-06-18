@@ -139,8 +139,8 @@ function makeStarShape(outerR, innerR, points) {
 }
 
 const wandGroup = new THREE.Group();
-const wandRestPosition = new THREE.Vector3(-3.3, 0.07, 1.4);
-const wandRestRotation = new THREE.Euler(Math.PI / 2, 0.55, 0.3);
+const wandRestPosition = new THREE.Vector3(-3.3, 0.95, 1.4);
+const wandRestRotation = new THREE.Euler(0.3, 0.5, 0.15);
 wandGroup.position.copy(wandRestPosition);
 wandGroup.rotation.copy(wandRestRotation);
 scene.add(wandGroup);
@@ -641,10 +641,13 @@ function findGlossaryEntryAt(clientX, clientY) {
 }
 
 // ---------------- magic wand interaction ----------------
+const WAND_HOLD_Y = 1.05;
 let wandHeld = false;
 let wandAnimating = false;
-const wandTargetPos = new THREE.Vector3();
-const wandFollowPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.3);
+let isPointerDown = false;
+let wandTime = 0;
+const wandTargetPos = wandRestPosition.clone();
+const wandFollowPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WAND_HOLD_Y);
 const wandPickRaycaster = new THREE.Raycaster();
 const wandMoveRaycaster = new THREE.Raycaster();
 const wandNDC = new THREE.Vector2();
@@ -664,34 +667,19 @@ function updateWandTarget(clientX, clientY) {
   wandNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
   wandMoveRaycaster.setFromCamera(wandNDC, camera);
   if (wandMoveRaycaster.ray.intersectPlane(wandFollowPlane, wandPlaneHit)) {
-    wandTargetPos.set(wandPlaneHit.x, 1.3, wandPlaneHit.z);
+    wandTargetPos.set(wandPlaneHit.x, WAND_HOLD_Y, wandPlaneHit.z);
   }
 }
 
-function pickUpWand(clientX, clientY) {
+function pickUpWand() {
   if (wandHeld) return;
   wandHeld = true;
   orbit.enabled = false;
   wandCastBtn.classList.add('visible');
   wandHint.classList.add('hidden');
-
-  updateWandTarget(clientX, clientY);
-  const startPos = wandGroup.position.clone();
-  const startRot = wandGroup.rotation.clone();
-  const heldRot = new THREE.Euler(0.12, 0, -0.08);
-  wandAnimating = true;
-  tween(500, (t) => {
-    wandGroup.position.set(
-      THREE.MathUtils.lerp(startPos.x, wandTargetPos.x, t),
-      THREE.MathUtils.lerp(startPos.y, 1.3, t),
-      THREE.MathUtils.lerp(startPos.z, wandTargetPos.z, t),
-    );
-    wandGroup.rotation.set(
-      THREE.MathUtils.lerp(startRot.x, heldRot.x, t),
-      THREE.MathUtils.lerp(startRot.y, heldRot.y, t),
-      THREE.MathUtils.lerp(startRot.z, heldRot.z, t),
-    );
-  }).then(() => { wandAnimating = false; });
+  tween(220, (t) => {
+    wandGroup.scale.setScalar(1 + Math.sin(Math.PI * t) * 0.18);
+  });
 }
 
 function putDownWand() {
@@ -700,15 +688,16 @@ function putDownWand() {
   orbit.enabled = true;
   wandCastBtn.classList.remove('visible');
 
-  const startPos = wandGroup.position.clone();
+  const startPos = wandTargetPos.clone();
   const startRot = wandGroup.rotation.clone();
   wandAnimating = true;
   tween(500, (t) => {
-    wandGroup.position.set(
+    wandTargetPos.set(
       THREE.MathUtils.lerp(startPos.x, wandRestPosition.x, t),
       THREE.MathUtils.lerp(startPos.y, wandRestPosition.y, t),
       THREE.MathUtils.lerp(startPos.z, wandRestPosition.z, t),
     );
+    wandGroup.position.copy(wandTargetPos);
     wandGroup.rotation.set(
       THREE.MathUtils.lerp(startRot.x, wandRestRotation.x, t),
       THREE.MathUtils.lerp(startRot.y, wandRestRotation.y, t),
@@ -724,18 +713,26 @@ wandCastBtn.addEventListener('click', () => {
   spawnSparkleBurst(tip);
 });
 
+// Wand only moves while you press-and-drag (not on hover), so moving the
+// pointer to click Next/Prev or other UI never disturbs it, and camera
+// orbit (also drag-based) stays independent since it targets a different
+// gesture state (wandHeld) rather than fighting over the same listeners.
 canvas.addEventListener('pointermove', (e) => {
-  if (wandHeld && !wandAnimating) updateWandTarget(e.clientX, e.clientY);
+  if (isPointerDown && wandHeld && !wandAnimating) updateWandTarget(e.clientX, e.clientY);
 });
 
-canvas.addEventListener('pointerdown', (e) => { pointerDownPos = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointerdown', (e) => {
+  pointerDownPos = { x: e.clientX, y: e.clientY };
+  isPointerDown = true;
+});
 canvas.addEventListener('pointerup', (e) => {
+  isPointerDown = false;
   if (!pointerDownPos) return;
   const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
   pointerDownPos = null;
   if (dist > 6) return;
   if (!wandHeld && isWandClicked(e.clientX, e.clientY)) {
-    pickUpWand(e.clientX, e.clientY);
+    pickUpWand();
     return;
   }
   if (wandHeld) {
@@ -852,7 +849,20 @@ function animate() {
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
   orbit.update();
-  if (wandHeld && !wandAnimating) wandGroup.position.lerp(wandTargetPos, 0.22);
+  if (!wandAnimating) {
+    wandTime += dt;
+    const bob = Math.sin(wandTime * 1.6) * 0.05;
+    wandGroup.position.set(wandTargetPos.x, wandTargetPos.y + bob, wandTargetPos.z);
+    if (wandHeld) {
+      wandGroup.rotation.set(0.12, wandGroup.rotation.y, -0.08);
+    } else {
+      wandGroup.rotation.set(
+        wandRestRotation.x,
+        wandRestRotation.y + Math.sin(wandTime * 0.6) * 0.18,
+        wandRestRotation.z,
+      );
+    }
+  }
   updateSparkleBursts(dt);
   renderer.render(scene, camera);
 }
