@@ -7,13 +7,10 @@
   const wrap = (inner) => I.svgWrap(I.defsBlock() + inner);
 
   const illoCover = wrap(`
-    ${I.sky('evening')}
-    ${I.sun(120, 70, 44)}
-    ${I.grassHill()}
-    ${I.barn(330, 150, 0.85)}
-    ${I.webCircle(150, 120, 78, '')}
-    ${I.spiderCharlotte(150, 120, 1.3)}
-    ${I.pigWilbur(300, 300, 1.5)}
+    ${I.webCircle(300, 140, 105, '', '#eef2ea')}
+    ${I.spiderCharlotte(300, 150, 1.7)}
+    ${I.strawBed(290, 350, 1.3, 260)}
+    ${I.pigWilbur(250, 305, 1.35)}
   `);
 
   const illoTitle = wrap(`

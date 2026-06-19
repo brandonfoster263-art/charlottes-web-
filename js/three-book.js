@@ -6,8 +6,9 @@ const COVER_SVG = window.COVER_ILLUSTRATION;
 
 const RAINBOW = ['#e0453f', '#e88a2b', '#d8a418', '#3f9e4d', '#2f8fd0', '#5a5fd6', '#a945c4'];
 const CREAM = '#fbf2da';
-const COVER_RED = '#8c2f2f';
-const COVER_RED_DARK = '#6e2222';
+const COVER_GREEN = '#8b9678';
+const COVER_GREEN_DARK = '#5e6b52';
+const COVER_INK = '#3f4a3a';
 const GOLD = '#d8b35c';
 
 const BOOK_W = 3.4;
@@ -294,26 +295,41 @@ function makeSpineTexture() {
   c.width = 128; c.height = 768;
   const ctx = c.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 128, 0);
-  grad.addColorStop(0, COVER_RED_DARK);
-  grad.addColorStop(0.5, COVER_RED);
-  grad.addColorStop(1, COVER_RED_DARK);
+  grad.addColorStop(0, COVER_GREEN_DARK);
+  grad.addColorStop(0.5, COVER_GREEN);
+  grad.addColorStop(1, COVER_GREEN_DARK);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 128, 768);
+  for (let i = 0; i < 900; i++) {
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+    ctx.fillRect(Math.random() * 128, Math.random() * 768, 1.3, 1.3);
+  }
   ctx.save();
-  ctx.translate(64, 384);
+  ctx.translate(64, 330);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillStyle = GOLD;
-  ctx.font = '700 56px "Baloo 2", "Comic Sans MS", cursive';
+  ctx.fillStyle = COVER_INK;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  ctx.font = "italic 700 50px Georgia, 'Times New Roman', serif";
   ctx.fillText("Charlotte's Web", 0, 0);
+  ctx.font = "700 26px Georgia, 'Times New Roman', serif";
+  ctx.fillText('E. B. WHITE', 0, 56);
   ctx.restore();
+  ctx.strokeStyle = COVER_INK;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.arc(64, 690, 22, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(64, 672); ctx.lineTo(64, 708);
+  ctx.moveTo(48, 690); ctx.lineTo(80, 690);
+  ctx.stroke();
   return new THREE.CanvasTexture(c);
 }
 
 const sideMat = new THREE.MeshStandardMaterial({ map: makePageEdgeTexture(), roughness: 0.95 });
 const spineMat = new THREE.MeshStandardMaterial({ map: makeSpineTexture(), roughness: 0.7 });
-const backMat = new THREE.MeshStandardMaterial({ color: COVER_RED_DARK, roughness: 0.8 });
+const backMat = new THREE.MeshStandardMaterial({ color: COVER_GREEN_DARK, roughness: 0.8 });
 
 // ---------------- SVG rasterization ----------------
 const svgImageCache = new Map();
@@ -441,7 +457,50 @@ async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, c
   return wordRects;
 }
 
-function createPageSlot(flip180 = false) {
+// Vintage cloth-bound look for the front cover: sage cloth backdrop, a serif
+// title block, the web/spider/pig artwork, and the author/illustrator credit.
+async function drawCoverCanvas(canvasEl, page) {
+  const ctx = canvasEl.getContext('2d');
+  const W = canvasEl.width, H = canvasEl.height;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = COVER_GREEN;
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 4000; i++) {
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)';
+    ctx.fillRect(Math.random() * W, Math.random() * H, 1.4, 1.4);
+  }
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.28, W / 2, H / 2, H * 0.64);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(35,40,30,0.3)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = COVER_INK;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `italic 700 ${Math.round(W * 0.135)}px Georgia, 'Times New Roman', serif`;
+  ctx.fillText("Charlotte's", W / 2, H * 0.145);
+  ctx.fillText('Web', W / 2, H * 0.145 + W * 0.145);
+
+  const img = await loadSvgImage(page.illustration);
+  if (img) {
+    const ar = 600 / 420;
+    const areaW = W * 0.8;
+    const areaH = areaW / ar;
+    ctx.drawImage(img, (W - areaW) / 2, H * 0.32, areaW, areaH);
+  }
+
+  ctx.font = `700 ${Math.round(W * 0.05)}px Georgia, 'Times New Roman', serif`;
+  ctx.fillText('E. B. WHITE', W / 2, H * 0.865);
+  ctx.font = `italic 400 ${Math.round(W * 0.034)}px Georgia, 'Times New Roman', serif`;
+  ctx.fillText('Illustrated by', W / 2, H * 0.898);
+  ctx.font = `700 ${Math.round(W * 0.042)}px Georgia, 'Times New Roman', serif`;
+  ctx.fillText('GARTH WILLIAMS', W / 2, H * 0.935);
+  return [];
+}
+
+function createPageSlot(flip180 = false, isCover = false) {
   const cv = document.createElement('canvas');
   cv.width = TEX_W;
   cv.height = TEX_H;
@@ -455,7 +514,9 @@ function createPageSlot(flip180 = false) {
     wordRects: [],
     async setPage(pageLike, withText, highlightIndex = -1) {
       const centered = pageLike.kind === 'cover' || pageLike.kind === 'title' || pageLike.kind === 'end';
-      this.wordRects = await drawPageCanvas(cv, pageLike, { withText, highlightIndex, centered, flip180 });
+      this.wordRects = isCover
+        ? await drawCoverCanvas(cv, pageLike)
+        : await drawPageCanvas(cv, pageLike, { withText, highlightIndex, centered, flip180 });
       this.texture.needsUpdate = true;
     },
     dispose() {
@@ -474,7 +535,7 @@ bookRoot.add(closedBook);
 
 const rightSlot = createPageSlot();
 const leftSlot = createPageSlot(true);
-const coverSlot = createPageSlot();
+const coverSlot = createPageSlot(false, true);
 
 const bulk = new THREE.Mesh(
   new THREE.BoxGeometry(BOOK_W, BOOK_T - COVER_T, BOOK_D),
