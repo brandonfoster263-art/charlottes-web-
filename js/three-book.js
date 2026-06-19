@@ -44,6 +44,7 @@ const wordPopupWord = document.getElementById('word-popup-word');
 const wordPopupDef = document.getElementById('word-popup-def');
 const wandHint = document.getElementById('wand-hint');
 const wandCastBtn = document.getElementById('wand-cast-btn');
+const wandDpad = document.getElementById('wand-dpad');
 
 // ---------------- renderer / scene / camera ----------------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -675,6 +676,7 @@ function pickUpWand() {
   if (wandHeld) return;
   wandHeld = true;
   wandCastBtn.classList.add('visible');
+  wandDpad.classList.add('visible');
   wandHint.classList.add('hidden');
   tween(220, (t) => {
     wandGroup.scale.setScalar(1 + Math.sin(Math.PI * t) * 0.18);
@@ -685,7 +687,40 @@ function putDownWand() {
   if (!wandHeld) return;
   wandHeld = false;
   wandCastBtn.classList.remove('visible');
+  wandDpad.classList.remove('visible');
+  wandMoveDir.x = 0;
+  wandMoveDir.z = 0;
 }
+
+// Directional pad lets people nudge the held wand with simple taps/holds
+// instead of having to drag it across the canvas.
+const WAND_PAD_SPEED = 2.6;
+const WAND_BOUNDS = { minX: -5.5, maxX: 5.5, minZ: -3.5, maxZ: 6.5 };
+const wandMoveDir = { x: 0, z: 0 };
+const WAND_PAD_VECTORS = {
+  up: { x: 0, z: -1 },
+  down: { x: 0, z: 1 },
+  left: { x: -1, z: 0 },
+  right: { x: 1, z: 0 },
+};
+
+wandDpad.querySelectorAll('.dpad-btn').forEach((btn) => {
+  const vec = WAND_PAD_VECTORS[btn.dataset.dir];
+  const start = (e) => {
+    e.preventDefault();
+    btn.setPointerCapture(e.pointerId);
+    wandMoveDir.x = vec.x;
+    wandMoveDir.z = vec.z;
+  };
+  const stop = () => {
+    wandMoveDir.x = 0;
+    wandMoveDir.z = 0;
+  };
+  btn.addEventListener('pointerdown', start);
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointerleave', stop);
+  btn.addEventListener('pointercancel', stop);
+});
 
 wandCastBtn.addEventListener('click', () => {
   if (!wandHeld) return;
@@ -859,6 +894,10 @@ function animate() {
   lastFrameTime = now;
   orbit.update();
   wandTime += dt;
+  if (wandHeld && (wandMoveDir.x || wandMoveDir.z)) {
+    wandTargetPos.x = THREE.MathUtils.clamp(wandTargetPos.x + wandMoveDir.x * WAND_PAD_SPEED * dt, WAND_BOUNDS.minX, WAND_BOUNDS.maxX);
+    wandTargetPos.z = THREE.MathUtils.clamp(wandTargetPos.z + wandMoveDir.z * WAND_PAD_SPEED * dt, WAND_BOUNDS.minZ, WAND_BOUNDS.maxZ);
+  }
   const bob = Math.sin(wandTime * 1.6) * 0.05;
   wandGroup.position.set(wandTargetPos.x, wandTargetPos.y + bob, wandTargetPos.z);
   if (wandHeld) {

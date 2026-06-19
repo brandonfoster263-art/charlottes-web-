@@ -183,6 +183,39 @@ html,body{
 #wand-cast-btn.visible{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);}
 #wand-cast-btn:active{transform:translateY(3px) scale(.95);}
 
+#wand-dpad{
+  position:absolute;
+  left:4vw;
+  bottom:9%;
+  z-index:40;
+  display:grid;
+  grid-template-columns:repeat(3,38px);
+  grid-template-rows:repeat(2,38px);
+  gap:4px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+  transform:translateY(10px) scale(.9);
+}
+#wand-dpad.visible{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);}
+.dpad-btn{
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+  background:linear-gradient(180deg,#fff0c2,#ffd86b);
+  color:#5a3d00;
+  font-size:15px;
+  line-height:1;
+  box-shadow:0 4px 0 #b8860b, 0 6px 12px rgba(0,0,0,0.35);
+  touch-action:none;
+  user-select:none;
+}
+.dpad-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b8860b;}
+.dpad-up{grid-column:2;grid-row:1;}
+.dpad-left{grid-column:1;grid-row:2;}
+.dpad-right{grid-column:3;grid-row:2;}
+.dpad-down{grid-column:2;grid-row:2;}
+
 /* ---------- glossary word popup ---------- */
 #word-popup{
   position:fixed;
@@ -307,4 +340,6 @@ html,body{
   #page-indicator{font-size:12px;min-width:56px;}
   #wand-hint{font-size:11px;top:9vh;}
   #wand-cast-btn{font-size:13px;padding:.5em .9em;right:3vw;bottom:13%;}
+  #wand-dpad{left:3vw;bottom:13%;grid-template-columns:repeat(3,32px);grid-template-rows:repeat(2,32px);}
+  .dpad-btn{font-size:13px;}
 }
