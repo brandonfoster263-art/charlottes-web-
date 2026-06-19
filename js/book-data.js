@@ -6,13 +6,6 @@
   const I = window.Illustrations;
   const wrap = (inner) => I.svgWrap(I.defsBlock() + inner);
 
-  const illoCover = wrap(`
-    ${I.webCircle(300, 140, 105, '', '#eef2ea')}
-    ${I.spiderCharlotte(300, 150, 1.7)}
-    ${I.strawBed(290, 350, 1.3, 260)}
-    ${I.pigWilbur(250, 305, 1.35)}
-  `);
-
   const illoTitle = wrap(`
     ${I.sky('day')}
     ${I.sun(500, 60, 36)}
@@ -303,8 +296,6 @@
       scene: () => `${I.sky('day')}${I.sun(300, 60, 32)}${I.grassHill()}${I.barn(360, 170, 0.6)}${I.webCircle(220, 150, 40, '')}${I.spiderCharlotte(220, 150, 0.9)}${I.heart(420, 110, 1)}${I.pigWilbur(260, 320, 1.05, 'happy')}`,
     },
   ];
-
-  window.COVER_ILLUSTRATION = illoCover;
 
   window.BOOK_PAGES = [
     {

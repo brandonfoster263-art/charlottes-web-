@@ -208,23 +208,6 @@ function webCircle(cx, cy, r, text, color = '#e8e8e8') {
   return `<g>${spokes}${rings}${label}</g>`;
 }
 
-function strawBed(x, y, scale = 1, width = 220) {
-  let strands = '';
-  const n = Math.round(width / 7);
-  for (let i = 0; i < n; i++) {
-    const sx = -width / 2 + i * (width / n) + (Math.random() - 0.5) * 4;
-    const lean = (Math.random() - 0.5) * 22;
-    const len = 26 + Math.random() * 16;
-    const shade = i % 3 === 0 ? '#c9a227' : i % 3 === 1 ? '#e0bc4e' : '#a9842a';
-    strands += `<line x1="${sx}" y1="6" x2="${sx + lean}" y2="${-len}" stroke="${shade}" stroke-width="2.6" stroke-linecap="round" opacity="0.9"/>`;
-  }
-  return `
-  <g transform="translate(${x},${y}) scale(${scale})">
-    <ellipse cx="0" cy="10" rx="${width / 2}" ry="14" fill="#cfa636" opacity="0.55"/>
-    ${strands}
-  </g>`;
-}
-
 function eggSac(x, y, scale = 1) {
   return `
   <g transform="translate(${x},${y}) scale(${scale})">
@@ -296,5 +279,5 @@ function heart(x, y, scale = 1, color = '#e0556b') {
 window.Illustrations = {
   svgWrap, defsBlock, sky, sun, moonStars, grassHill, fenceRow, barn, farmhouse,
   pigWilbur, spiderCharlotte, girlFern, farmerZuckerman, goose, sheep, rat,
-  webCircle, strawBed, eggSac, babySpiders, fairTent, ribbon, heart, cloud, appleTree, snowfall,
+  webCircle, eggSac, babySpiders, fairTent, ribbon, heart, cloud, appleTree, snowfall,
 };

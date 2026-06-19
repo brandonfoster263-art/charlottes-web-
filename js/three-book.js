@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/three/examples/jsm/controls/OrbitControls.js';
 
 const PAGES = window.BOOK_PAGES;
-const COVER_SVG = window.COVER_ILLUSTRATION;
+const COVER_PHOTO_URL = 'assets/illustrations/cover-photo.jpg';
 
 const RAINBOW = ['#e0453f', '#e88a2b', '#d8a418', '#3f9e4d', '#2f8fd0', '#5a5fd6', '#a945c4'];
 const CREAM = '#fbf2da';
@@ -345,6 +345,19 @@ function loadSvgImage(svgString) {
   return promise;
 }
 
+const rasterImageCache = new Map();
+function loadRasterImage(url) {
+  if (rasterImageCache.has(url)) return rasterImageCache.get(url);
+  const promise = new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+  rasterImageCache.set(url, promise);
+  return promise;
+}
+
 // ---------------- word wrap + page canvas rendering ----------------
 function wrapWords(ctx, text, maxWidth, font) {
   ctx.font = font;
@@ -483,12 +496,15 @@ async function drawCoverCanvas(canvasEl, page) {
   ctx.fillText("Charlotte's", W / 2, H * 0.145);
   ctx.fillText('Web', W / 2, H * 0.145 + W * 0.145);
 
-  const img = await loadSvgImage(page.illustration);
+  const img = await loadRasterImage(COVER_PHOTO_URL);
   if (img) {
-    const ar = 600 / 420;
-    const areaW = W * 0.8;
-    const areaH = areaW / ar;
-    ctx.drawImage(img, (W - areaW) / 2, H * 0.32, areaW, areaH);
+    const ar = img.naturalWidth / img.naturalHeight;
+    const boxX = W * 0.08, boxY = H * 0.30, boxW = W * 0.84, boxH = H * 0.535;
+    let dw = boxW, dh = dw / ar;
+    if (dh > boxH) { dh = boxH; dw = dh * ar; }
+    const dx = boxX + (boxW - dw) / 2;
+    const dy = boxY + (boxH - dh) / 2;
+    ctx.drawImage(img, dx, dy, dw, dh);
   }
 
   ctx.font = `700 ${Math.round(W * 0.05)}px Georgia, 'Times New Roman', serif`;
@@ -988,7 +1004,7 @@ animate();
 // ---------------- initial textures ----------------
 (async () => {
   await Promise.all([
-    coverSlot.setPage({ illustration: COVER_SVG, text: '' }, false),
+    coverSlot.setPage({ text: '' }, false),
     leftSlot.setPage(PAGES[0], false),
     rightSlot.setPage(PAGES[1], true),
   ]);
