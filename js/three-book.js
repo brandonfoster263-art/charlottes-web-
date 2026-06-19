@@ -139,7 +139,7 @@ function makeStarShape(outerR, innerR, points) {
 }
 
 const wandGroup = new THREE.Group();
-const wandRestPosition = new THREE.Vector3(-3.3, 0.95, 1.4);
+const wandRestPosition = new THREE.Vector3(-2.3, 0.95, 1.4);
 const wandRestRotation = new THREE.Euler(0.3, 0.5, 0.15);
 wandGroup.position.copy(wandRestPosition);
 wandGroup.rotation.copy(wandRestRotation);
