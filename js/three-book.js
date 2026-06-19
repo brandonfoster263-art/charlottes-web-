@@ -694,21 +694,44 @@ wandCastBtn.addEventListener('click', () => {
   spawnSparkleBurst(tip);
 });
 
-// Wand only moves while you press-and-drag starting directly on it, so
-// hovering toward Next/Prev/Cast never disturbs it, and dragging anywhere
-// else still orbits the camera even while the wand is held.
+// The wand floats right where people naturally start a spin-the-book drag,
+// so a quick drag always orbits the camera even if it starts on the wand.
+// Only pausing briefly on the wand before dragging actually grabs it, so
+// the camera is never blocked while the wand is held.
+const WAND_GRAB_DELAY = 220;
+let wandGrabCandidate = false;
+let wandGrabTimer = null;
+
 canvas.addEventListener('pointermove', (e) => {
+  if (isPointerDown && wandGrabCandidate && pointerDownPos) {
+    const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+    if (moved > 6) {
+      wandGrabCandidate = false;
+      clearTimeout(wandGrabTimer);
+    }
+  }
   if (isPointerDown && wandDragging) updateWandTarget(e.clientX, e.clientY);
 });
 
 canvas.addEventListener('pointerdown', (e) => {
   pointerDownPos = { x: e.clientX, y: e.clientY };
   isPointerDown = true;
-  wandDragging = wandHeld && isWandClicked(e.clientX, e.clientY);
-  if (wandDragging) orbit.enabled = false;
+  wandDragging = false;
+  wandGrabCandidate = wandHeld && isWandClicked(e.clientX, e.clientY);
+  if (wandGrabCandidate) {
+    wandGrabTimer = setTimeout(() => {
+      if (isPointerDown && wandGrabCandidate) {
+        wandGrabCandidate = false;
+        wandDragging = true;
+        orbit.enabled = false;
+      }
+    }, WAND_GRAB_DELAY);
+  }
 });
 canvas.addEventListener('pointerup', (e) => {
   isPointerDown = false;
+  wandGrabCandidate = false;
+  clearTimeout(wandGrabTimer);
   if (wandDragging) {
     wandDragging = false;
     orbit.enabled = true;
