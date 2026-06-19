@@ -34,6 +34,7 @@ const dragHint = document.getElementById('drag-hint');
 const controlsEl = document.getElementById('controls');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
+const closeBtn = document.getElementById('close-btn');
 const readBtn = document.getElementById('read-btn');
 const indicator = document.getElementById('page-indicator');
 const dot = document.getElementById('read-dot');
@@ -893,6 +894,32 @@ async function openBook() {
   updateIndicator();
 }
 
+async function closeBook() {
+  if (!opened || flipping) return;
+  opened = false;
+  stopReading();
+  hideGlossaryPopup();
+  controlsEl.classList.remove('visible');
+  glossaryHint.classList.remove('visible');
+
+  await tween(1100, (t) => {
+    flapPivot.rotation.z = Math.PI * (1 - t);
+    flapPivot.position.y = THREE.MathUtils.lerp(COVER_T, BOOK_T - COVER_T, t) + Math.sin(Math.PI * t) * 0.55;
+    closedBook.position.x = THREE.MathUtils.lerp(BOOK_W / 2, 0, t);
+  });
+
+  if (current !== 0) {
+    current = 0;
+    await Promise.all([
+      leftSlot.setPage(PAGES[0], false),
+      rightSlot.setPage(PAGES[1], true),
+    ]);
+  }
+
+  openBtn.classList.remove('hidden');
+  dragHint.classList.remove('hidden');
+}
+
 async function flip(direction) {
   if (flipping || !opened) return;
   if (direction === 1 && current + 2 >= PAGES.length) return;
@@ -959,6 +986,7 @@ async function flip(direction) {
 
 // ---------------- wiring ----------------
 openBtn.addEventListener('click', openBook);
+closeBtn.addEventListener('click', closeBook);
 nextBtn.addEventListener('click', () => flip(1));
 prevBtn.addEventListener('click', () => flip(-1));
 readBtn.addEventListener('click', toggleRead);
