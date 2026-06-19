@@ -125,6 +125,16 @@ table.rotation.x = -Math.PI / 2;
 table.receiveShadow = true;
 scene.add(table);
 
+// Swap in the real reclaimed-wood photo once it loads; the procedural
+// texture above stays as the instant placeholder until then.
+new THREE.TextureLoader().load('assets/textures/table-wood.jpg', (tex) => {
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 6);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  table.material.map = tex;
+  table.material.needsUpdate = true;
+});
+
 // ---------------- magic wand ----------------
 function makeStarShape(outerR, innerR, points) {
   const shape = new THREE.Shape();
