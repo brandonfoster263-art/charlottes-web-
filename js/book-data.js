@@ -6,6 +6,19 @@
   const I = window.Illustrations;
   const wrap = (inner) => I.svgWrap(I.defsBlock() + inner);
 
+  // Maps each story page (1-65, in order) to one of the 60 numbered photo
+  // illustrations in assets/illustrations/story/, chosen by matching plot beat.
+  const STORY_PHOTOS = [
+    1, 1, 2, 3, 4, 5, 6, 7, 8, 8,
+    15, 18, 17, 19, 9, 10, 11, 12, 20, 22,
+    23, 25, 24, 14, 21, 31, 32, 33, 34, 35,
+    26, 30, 39, 38, 36, 41, 41, 42, 40, 42,
+    43, 43, 44, 46, 45, 47, 49, 51, 52, 54,
+    53, 55, 57, 56, 56, 56, 51, 56, 58, 59,
+    59, 59, 59, 59, 59,
+  ];
+  const storyPhoto = (n) => `assets/illustrations/story/img${String(n).padStart(2, '0')}.jpg`;
+
   const illoTitle = wrap(`
     ${I.sky('day')}
     ${I.sun(500, 60, 36)}
@@ -308,12 +321,14 @@
     ...storyPages.map((p, i) => ({
       id: `p${i + 1}`,
       illustration: wrap(p.scene()),
+      photo: storyPhoto(STORY_PHOTOS[i]),
       text: p.text,
     })),
     {
       id: 'end',
       kind: 'end',
       illustration: illoEnd,
+      photo: storyPhoto(60),
       text: "Wilbur never forgot Charlotte. She was clever, and kind, and brave. That is the tale of Charlotte's Web. THE END.",
     },
     {

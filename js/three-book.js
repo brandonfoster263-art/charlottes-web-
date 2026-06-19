@@ -400,9 +400,9 @@ async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, c
 
   const margin = W * 0.09;
   const illoH = withText ? H * 0.48 : H * 0.8;
-  const img = await loadSvgImage(page.illustration);
+  const img = page.photo ? await loadRasterImage(page.photo) : await loadSvgImage(page.illustration);
   if (img) {
-    const ar = 600 / 420;
+    const ar = page.photo ? img.naturalWidth / img.naturalHeight : 600 / 420;
     const areaW = W - margin * 2;
     const areaH = illoH - margin;
     let dw = areaW, dh = dw / ar;
