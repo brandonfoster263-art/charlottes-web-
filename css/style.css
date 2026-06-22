@@ -183,6 +183,28 @@ html,body{
 #wand-cast-btn.visible{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);}
 #wand-cast-btn:active{transform:translateY(3px) scale(.95);}
 
+#wand-down-btn{
+  position:absolute;
+  right:4vw;
+  bottom:calc(9% + 58px);
+  z-index:40;
+  font-family:'Baloo 2','Comic Sans MS',cursive;
+  font-size:clamp(14px,1.8vw,18px);
+  border:none;
+  border-radius:999px;
+  padding:.55em 1.2em;
+  cursor:pointer;
+  background:linear-gradient(180deg,#f3ead6,#cdbf9b);
+  color:#4a3a1e;
+  box-shadow:0 5px 0 #8a7a52, 0 8px 16px rgba(0,0,0,0.4);
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(10px) scale(.9);
+  transition:opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+#wand-down-btn.visible{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);}
+#wand-down-btn:active{transform:translateY(3px) scale(.95);}
+
 #wand-dpad{
   position:absolute;
   left:4vw;
@@ -340,6 +362,7 @@ html,body{
   #page-indicator{font-size:12px;min-width:56px;}
   #wand-hint{font-size:11px;top:9vh;}
   #wand-cast-btn{font-size:13px;padding:.5em .9em;right:3vw;bottom:13%;}
+  #wand-down-btn{font-size:12px;padding:.45em .9em;right:3vw;bottom:calc(13% + 50px);}
   #wand-dpad{left:3vw;bottom:13%;grid-template-columns:repeat(3,32px);grid-template-rows:repeat(2,32px);}
   .dpad-btn{font-size:13px;}
 }

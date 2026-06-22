@@ -46,6 +46,7 @@ const wordPopupWord = document.getElementById('word-popup-word');
 const wordPopupDef = document.getElementById('word-popup-def');
 const wandHint = document.getElementById('wand-hint');
 const wandCastBtn = document.getElementById('wand-cast-btn');
+const wandDownBtn = document.getElementById('wand-down-btn');
 const wandDpad = document.getElementById('wand-dpad');
 
 // ---------------- renderer / scene / camera ----------------
@@ -382,7 +383,7 @@ function wrapWords(ctx, text, maxWidth, font) {
   return { lines, spaceWidth };
 }
 
-async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, centered = false, flip180 = false } = {}) {
+async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, centered = false, flip180 = false, spineEdge = null } = {}) {
   const ctx = canvasEl.getContext('2d');
   const W = canvasEl.width, H = canvasEl.height;
   ctx.save();
@@ -393,6 +394,22 @@ async function drawPageCanvas(canvasEl, page, { withText, highlightIndex = -1, c
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = CREAM;
   ctx.fillRect(0, 0, W, H);
+
+  // Soft shadow + faint warm tint down the binding edge so the open book reads
+  // like real bound pages curving into the spine.
+  if (spineEdge) {
+    const gw = W * 0.17;
+    const onLeft = spineEdge === 'left';
+    const grad = onLeft
+      ? ctx.createLinearGradient(0, 0, gw, 0)
+      : ctx.createLinearGradient(W, 0, W - gw, 0);
+    grad.addColorStop(0, 'rgba(60,40,20,0.30)');
+    grad.addColorStop(0.45, 'rgba(90,65,35,0.10)');
+    grad.addColorStop(1, 'rgba(90,65,35,0)');
+    ctx.fillStyle = grad;
+    if (onLeft) ctx.fillRect(0, 0, gw, H);
+    else ctx.fillRect(W - gw, 0, gw, H);
+  }
 
   const border = W * 0.014;
   ctx.strokeStyle = 'rgba(140,47,47,0.35)';
@@ -529,11 +546,11 @@ function createPageSlot(flip180 = false, isCover = false) {
     texture: tex,
     material,
     wordRects: [],
-    async setPage(pageLike, withText, highlightIndex = -1) {
+    async setPage(pageLike, withText, highlightIndex = -1, spineEdge = null) {
       const centered = pageLike.kind === 'cover' || pageLike.kind === 'title' || pageLike.kind === 'end';
       this.wordRects = isCover
         ? await drawCoverCanvas(cv, pageLike)
-        : await drawPageCanvas(cv, pageLike, { withText, highlightIndex, centered, flip180 });
+        : await drawPageCanvas(cv, pageLike, { withText, highlightIndex, centered, flip180, spineEdge });
       this.texture.needsUpdate = true;
     },
     dispose() {
@@ -576,6 +593,87 @@ flap.castShadow = true;
 flap.receiveShadow = true;
 flapPivot.add(flap);
 
+// ---------------- open-book extras: left page block + spine binding ----------
+// When the book is open we want it to read like a real bound book: a matching
+// stack of pages under the LEFT page (so it isn't a thin cover sliver), and a
+// cloth binding running down the gutter. Both stay hidden while closed.
+const STACK_T = BOOK_T - 2 * COVER_T;        // left page block thickness
+const PAGE_TOP_Y = BOOK_T - COVER_T;          // shared reading-surface height
+
+const leftStack = new THREE.Mesh(
+  new THREE.BoxGeometry(BOOK_W, STACK_T, BOOK_D),
+  [sideMat, sideMat, backMat, sideMat, sideMat, sideMat],
+);
+leftStack.position.set(-BOOK_W / 2, STACK_T / 2, 0);
+leftStack.castShadow = true;
+leftStack.receiveShadow = true;
+leftStack.visible = false;
+bookRoot.add(leftStack);
+
+// Cloth binding: a thin sage-green seam down the gutter, flush with the pages,
+// plus a soft rounded ridge so the spine is clearly visible from above.
+const spineGroup = new THREE.Group();
+spineGroup.visible = false;
+bookRoot.add(spineGroup);
+
+const spineSeam = new THREE.Mesh(
+  new THREE.BoxGeometry(0.14, PAGE_TOP_Y + 0.02, BOOK_D),
+  new THREE.MeshStandardMaterial({ color: COVER_GREEN, roughness: 0.75 }),
+);
+spineSeam.position.set(0, (PAGE_TOP_Y + 0.02) / 2, 0);
+spineGroup.add(spineSeam);
+
+const spineRidge = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.07, 0.07, BOOK_D, 18, 1),
+  new THREE.MeshStandardMaterial({ color: COVER_GREEN_DARK, roughness: 0.7 }),
+);
+spineRidge.rotation.x = Math.PI / 2;
+spineRidge.position.set(0, PAGE_TOP_Y - 0.005, 0);
+spineGroup.add(spineRidge);
+
+// ---------------- curling page (realistic flip) ----------------
+// A turning page is a segmented sheet hinged at the spine (world x = 0). Each
+// frame we bend it along an arc so the far edge curls up and over like real
+// paper, instead of swinging as one rigid board.
+const FLIP_SEGS = 30;
+function makeFlipGeometry() {
+  const geo = new THREE.PlaneGeometry(BOOK_W, BOOK_D, FLIP_SEGS, 1);
+  geo.rotateX(-Math.PI / 2);     // lay flat: width along X, depth along Z
+  geo.translate(BOOK_W / 2, 0, 0); // hinge at x = 0, sheet reaches to x = BOOK_W
+  return geo;
+}
+function buildCurlData(geo) {
+  const pos = geo.attributes.position;
+  const ds = BOOK_W / FLIP_SEGS;
+  const sIndex = new Int16Array(pos.count);
+  for (let j = 0; j < pos.count; j++) sIndex[j] = Math.round(pos.getX(j) / ds);
+  return { sIndex, ds };
+}
+// progress: 0 = flat on the right, 1 = flat on the left. dir +1 sweeps the
+// page from right→left; dir -1 mirrors it. curlMax controls how much the sheet
+// billows at the midpoint.
+function applyCurl(geo, data, progress, dir, baseY, curlMax = 1.15) {
+  const segs = FLIP_SEGS;
+  const A = Math.PI * progress * dir;
+  const B = curlMax * Math.sin(Math.PI * progress) * dir;
+  const X = new Float32Array(segs + 1);
+  const Y = new Float32Array(segs + 1);
+  for (let i = 1; i <= segs; i++) {
+    const u = (i - 0.5) / segs;
+    const th = A + B * u;
+    X[i] = X[i - 1] + Math.cos(th) * data.ds;
+    Y[i] = Y[i - 1] + Math.sin(th) * data.ds;
+  }
+  const pos = geo.attributes.position;
+  for (let j = 0; j < pos.count; j++) {
+    const i = data.sIndex[j];
+    pos.setX(j, X[i]);
+    pos.setY(j, baseY + Y[i]);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
 // ---------------- tweening helper ----------------
 function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -610,6 +708,42 @@ function stopReading() {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   if (speaking) setReadingState(false);
   dot.classList.remove('shown');
+}
+
+// Pick the warmest, most human-sounding voice the browser offers instead of
+// the default robotic one. Modern browsers ship neural "Natural"/"Online"
+// voices (Microsoft Aria/Jenny/Libby, Google, Apple Samantha/Eddy) — we rank
+// those first and fall back gracefully to any English voice.
+let chosenVoice = null;
+let voiceResolved = false;
+function pickStoryVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const en = voices.filter((v) => /^en(-|_|$)/i.test(v.lang));
+  const pool = en.length ? en : voices;
+  const prefer = [
+    /natural/i, /neural/i, /online/i,
+    /aria/i, /jenny/i, /libby/i, /sonia/i, /michelle/i,
+    /samantha/i, /allison/i, /ava/i, /serena/i, /eddy/i, /grandma/i,
+    /google\s*(us|uk)?\s*english/i, /google/i,
+  ];
+  for (const rx of prefer) {
+    const hit = pool.find((v) => rx.test(v.name));
+    if (hit) return hit;
+  }
+  // Avoid the obviously synthetic eSpeak fallbacks if anything else exists.
+  const nonRobotic = pool.find((v) => !/espeak|robot|microsoft david|microsoft mark/i.test(v.name));
+  return nonRobotic || pool[0];
+}
+function ensureVoice() {
+  if (voiceResolved) return;
+  chosenVoice = pickStoryVoice();
+  if (chosenVoice) voiceResolved = true;
+}
+if ('speechSynthesis' in window) {
+  ensureVoice();
+  window.speechSynthesis.onvoiceschanged = () => { voiceResolved = false; ensureVoice(); };
 }
 
 // ---------------- read-along word -> world projection ----------------
@@ -652,7 +786,7 @@ function placeDotOnRightPage(rect) {
 
 async function highlightWord(idx) {
   const page = PAGES[current + 1] ?? PAGES[current];
-  await rightSlot.setPage(page, true, idx);
+  await rightSlot.setPage(page, true, idx, 'left');
   const rect = rightSlot.wordRects[idx];
   if (rect) placeDotOnRightPage(rect);
 }
@@ -661,15 +795,19 @@ function toggleRead() {
   if (!opened) return;
   if (speaking) {
     stopReading();
-    rightSlot.setPage(PAGES[current + 1] ?? PAGES[current], true, -1);
+    rightSlot.setPage(PAGES[current + 1] ?? PAGES[current], true, -1, 'left');
     return;
   }
   if (!('speechSynthesis' in window)) return;
   const page = PAGES[current + 1] ?? PAGES[current];
   setReadingState(true);
+  ensureVoice();
   const utter = new SpeechSynthesisUtterance(page.text);
-  utter.rate = 0.85;
-  utter.pitch = 1.05;
+  if (chosenVoice) utter.voice = chosenVoice;
+  // Gentle, story-time cadence: a touch slow, natural pitch, soft volume.
+  utter.rate = 0.9;
+  utter.pitch = 1.0;
+  utter.volume = 1.0;
   const starts = computeWordStarts(page.text);
   utter.onboundary = (e) => {
     if (e.name && e.name !== 'word') return;
@@ -678,7 +816,7 @@ function toggleRead() {
   utter.onend = () => {
     setReadingState(false);
     dot.classList.remove('shown');
-    rightSlot.setPage(page, true, -1);
+    rightSlot.setPage(page, true, -1, 'left');
   };
   utter.onerror = () => {
     setReadingState(false);
@@ -730,24 +868,36 @@ function findGlossaryEntryAt(clientX, clientY) {
 }
 
 // ---------------- magic wand interaction ----------------
+// Designed to be effortless: tap anywhere near the wand to pick it up, then
+// just drag anywhere on the screen to move it (it follows your finger). Big
+// on-screen buttons cast sparkles and put it back down.
 const WAND_HOLD_Y = 1.05;
+const WAND_BASE_SCALE = 1.35;     // a little bigger so it's easy to see & grab
+const WAND_PICK_RADIUS = 90;       // px – generous tap target around the wand
+wandGroup.scale.setScalar(WAND_BASE_SCALE);
 let wandHeld = false;
 let isPointerDown = false;
 let wandDragging = false;
 let wandTime = 0;
 const wandTargetPos = wandRestPosition.clone();
 const wandFollowPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WAND_HOLD_Y);
-const wandPickRaycaster = new THREE.Raycaster();
 const wandMoveRaycaster = new THREE.Raycaster();
 const wandNDC = new THREE.Vector2();
 const wandPlaneHit = new THREE.Vector3();
+const _wandWorld = new THREE.Vector3();
 
-function isWandClicked(clientX, clientY) {
+// Screen-space distance from a point to the wand's star. Taps within
+// WAND_PICK_RADIUS count as hits, so you never have to aim precisely.
+function wandScreenDistance(clientX, clientY) {
+  wandStar.getWorldPosition(_wandWorld);
+  _wandWorld.project(camera);
   const rect = canvas.getBoundingClientRect();
-  wandNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-  wandNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-  wandPickRaycaster.setFromCamera(wandNDC, camera);
-  return wandPickRaycaster.intersectObjects(wandGroup.children, true).length > 0;
+  const sx = rect.left + (_wandWorld.x * 0.5 + 0.5) * rect.width;
+  const sy = rect.top + (-_wandWorld.y * 0.5 + 0.5) * rect.height;
+  return Math.hypot(clientX - sx, clientY - sy);
+}
+function isWandTapped(clientX, clientY) {
+  return wandScreenDistance(clientX, clientY) <= WAND_PICK_RADIUS;
 }
 
 function updateWandTarget(clientX, clientY) {
@@ -764,20 +914,29 @@ function pickUpWand() {
   if (wandHeld) return;
   wandHeld = true;
   wandCastBtn.classList.add('visible');
+  wandDownBtn.classList.add('visible');
   wandDpad.classList.add('visible');
   wandHint.classList.add('hidden');
-  tween(220, (t) => {
-    wandGroup.scale.setScalar(1 + Math.sin(Math.PI * t) * 0.18);
+  tween(240, (t) => {
+    wandGroup.scale.setScalar(WAND_BASE_SCALE * (1 + Math.sin(Math.PI * t) * 0.22));
   });
 }
 
 function putDownWand() {
   if (!wandHeld) return;
   wandHeld = false;
+  wandDragging = false;
+  orbit.enabled = true;
   wandCastBtn.classList.remove('visible');
+  wandDownBtn.classList.remove('visible');
   wandDpad.classList.remove('visible');
   wandMoveDir.x = 0;
   wandMoveDir.z = 0;
+  // Glide gently back to its resting perch beside the book.
+  const from = wandTargetPos.clone();
+  tween(500, (t) => {
+    wandTargetPos.lerpVectors(from, wandRestPosition, t);
+  });
 }
 
 // Directional pad lets people nudge the held wand with simple taps/holds
@@ -817,44 +976,30 @@ wandCastBtn.addEventListener('click', () => {
   spawnSparkleBurst(tip);
 });
 
-// The wand floats right where people naturally start a spin-the-book drag,
-// so a quick drag always orbits the camera even if it starts on the wand.
-// Only pausing briefly on the wand before dragging actually grabs it, so
-// the camera is never blocked while the wand is held.
-const WAND_GRAB_DELAY = 220;
-let wandGrabCandidate = false;
-let wandGrabTimer = null;
+wandDownBtn.addEventListener('click', putDownWand);
 
+// Interaction model:
+//   • Not holding the wand → drag spins the book; a tap near the wand picks it
+//     up; a tap on a glowing word opens its meaning.
+//   • Holding the wand → drag/tap anywhere moves the wand to your finger; the
+//     book stays put. Use the on-screen buttons to cast or put it down.
 canvas.addEventListener('pointermove', (e) => {
-  if (isPointerDown && wandGrabCandidate && pointerDownPos) {
-    const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-    if (moved > 6) {
-      wandGrabCandidate = false;
-      clearTimeout(wandGrabTimer);
-    }
-  }
   if (isPointerDown && wandDragging) updateWandTarget(e.clientX, e.clientY);
 });
 
 canvas.addEventListener('pointerdown', (e) => {
   pointerDownPos = { x: e.clientX, y: e.clientY };
   isPointerDown = true;
-  wandDragging = false;
-  wandGrabCandidate = wandHeld && isWandClicked(e.clientX, e.clientY);
-  if (wandGrabCandidate) {
-    wandGrabTimer = setTimeout(() => {
-      if (isPointerDown && wandGrabCandidate) {
-        wandGrabCandidate = false;
-        wandDragging = true;
-        orbit.enabled = false;
-      }
-    }, WAND_GRAB_DELAY);
+  if (wandHeld) {
+    // The wand immediately follows wherever you press/drag.
+    wandDragging = true;
+    orbit.enabled = false;
+    updateWandTarget(e.clientX, e.clientY);
   }
 });
+
 canvas.addEventListener('pointerup', (e) => {
   isPointerDown = false;
-  wandGrabCandidate = false;
-  clearTimeout(wandGrabTimer);
   if (wandDragging) {
     wandDragging = false;
     orbit.enabled = true;
@@ -862,13 +1007,10 @@ canvas.addEventListener('pointerup', (e) => {
   if (!pointerDownPos) return;
   const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
   pointerDownPos = null;
-  if (dist > 6) return;
-  if (!wandHeld && isWandClicked(e.clientX, e.clientY)) {
+  if (dist > 8) return;            // a drag, not a tap
+  if (wandHeld) return;            // tapping never drops it – use the button
+  if (isWandTapped(e.clientX, e.clientY)) {
     pickUpWand();
-    return;
-  }
-  if (wandHeld) {
-    putDownWand();
     return;
   }
   const entry = findGlossaryEntryAt(e.clientX, e.clientY);
@@ -881,10 +1023,14 @@ async function openBook() {
   opened = true;
   openBtn.classList.add('hidden');
   dragHint.classList.add('hidden');
+  leftStack.visible = true;
+  spineGroup.visible = true;
 
+  // The cover swings open and lands flat on the left page block (its pivot
+  // stays at reading height so the left page ends up level with the right).
   await tween(1100, (t) => {
     flapPivot.rotation.z = Math.PI * t;
-    flapPivot.position.y = THREE.MathUtils.lerp(BOOK_T - COVER_T, COVER_T, t) + Math.sin(Math.PI * t) * 0.55;
+    flapPivot.position.y = PAGE_TOP_Y + Math.sin(Math.PI * t) * 0.55;
     closedBook.position.x = THREE.MathUtils.lerp(0, BOOK_W / 2, t);
   });
 
@@ -904,15 +1050,18 @@ async function closeBook() {
 
   await tween(1100, (t) => {
     flapPivot.rotation.z = Math.PI * (1 - t);
-    flapPivot.position.y = THREE.MathUtils.lerp(COVER_T, BOOK_T - COVER_T, t) + Math.sin(Math.PI * t) * 0.55;
+    flapPivot.position.y = PAGE_TOP_Y + Math.sin(Math.PI * t) * 0.55;
     closedBook.position.x = THREE.MathUtils.lerp(BOOK_W / 2, 0, t);
   });
+
+  leftStack.visible = false;
+  spineGroup.visible = false;
 
   if (current !== 0) {
     current = 0;
     await Promise.all([
-      leftSlot.setPage(PAGES[0], false),
-      rightSlot.setPage(PAGES[1], true),
+      leftSlot.setPage(PAGES[0], false, -1, 'right'),
+      rightSlot.setPage(PAGES[1], true, -1, 'left'),
     ]);
   }
 
@@ -927,57 +1076,52 @@ async function flip(direction) {
   flipping = true;
   stopReading();
 
-  const pivot = new THREE.Object3D();
-  bookRoot.add(pivot);
-
+  // frontSlot = the face you see as the page lifts; backSlot = the face
+  // revealed underneath as it settles on the far side.
   const frontSlot = createPageSlot();
   const backSlot = createPageSlot(true);
+  backSlot.material.side = THREE.BackSide;
 
-  let boardLocalX, yStart, yEnd, endRot;
   if (direction === 1) {
-    boardLocalX = BOOK_W / 2;
-    yStart = RIGHT_SURFACE_Y;
-    yEnd = LEFT_SURFACE_Y + COVER_T;
-    endRot = Math.PI;
     await Promise.all([
-      frontSlot.setPage(PAGES[current + 1], true),
-      backSlot.setPage(PAGES[current + 2] ?? PAGES[current + 1], false),
+      frontSlot.setPage(PAGES[current + 1], true, -1, 'left'),
+      backSlot.setPage(PAGES[current + 2] ?? PAGES[current + 1], false, -1, 'right'),
     ]);
   } else {
-    boardLocalX = -BOOK_W / 2;
-    yStart = LEFT_SURFACE_Y;
-    yEnd = RIGHT_SURFACE_Y + COVER_T;
-    endRot = -Math.PI;
     await Promise.all([
-      frontSlot.setPage(PAGES[current], false),
-      backSlot.setPage(PAGES[current - 1] ?? PAGES[current], true),
+      frontSlot.setPage(PAGES[current], false, -1, 'right'),
+      backSlot.setPage(PAGES[current - 1] ?? PAGES[current], true, -1, 'left'),
     ]);
   }
 
-  const board = new THREE.Mesh(
-    new THREE.BoxGeometry(BOOK_W, COVER_T, BOOK_D),
-    [sideMat, spineMat, frontSlot.material, backSlot.material, sideMat, sideMat],
-  );
-  board.position.set(boardLocalX, COVER_T / 2, 0);
-  board.castShadow = true;
-  pivot.position.set(0, yStart, 0);
-  pivot.add(board);
+  const geo = makeFlipGeometry();
+  const curlData = buildCurlData(geo);
+  const frontMesh = new THREE.Mesh(geo, frontSlot.material);
+  const backMesh = new THREE.Mesh(geo, backSlot.material);
+  frontMesh.castShadow = true;
+  const flipGroup = new THREE.Group();
+  flipGroup.add(frontMesh, backMesh);
+  bookRoot.add(flipGroup);
 
-  await tween(950, (t) => {
-    pivot.rotation.z = endRot * t;
-    pivot.position.y = THREE.MathUtils.lerp(yStart, yEnd, t) + Math.sin(Math.PI * t) * 0.45;
+  // The sheet hovers a hair above the resting pages (which keep showing the
+  // matching content) so it lifts away and settles without z-fighting.
+  const FLIP_LIFT = 0.014;
+  applyCurl(geo, curlData, 0, direction, PAGE_TOP_Y + FLIP_LIFT);
+
+  await tween(1300, (t) => {
+    applyCurl(geo, curlData, t, direction, PAGE_TOP_Y + FLIP_LIFT);
   });
 
   current = direction === 1 ? current + 2 : current - 2;
   if (current < 0) current = 0;
 
   await Promise.all([
-    rightSlot.setPage(PAGES[current + 1] ?? PAGES[current], true),
-    leftSlot.setPage(PAGES[current], false),
+    rightSlot.setPage(PAGES[current + 1] ?? PAGES[current], true, -1, 'left'),
+    leftSlot.setPage(PAGES[current], false, -1, 'right'),
   ]);
 
-  bookRoot.remove(pivot);
-  board.geometry.dispose();
+  bookRoot.remove(flipGroup);
+  geo.dispose();
   frontSlot.dispose();
   backSlot.dispose();
   updateIndicator();
@@ -1033,7 +1177,7 @@ animate();
 (async () => {
   await Promise.all([
     coverSlot.setPage({ text: '' }, false),
-    leftSlot.setPage(PAGES[0], false),
-    rightSlot.setPage(PAGES[1], true),
+    leftSlot.setPage(PAGES[0], false, -1, 'right'),
+    rightSlot.setPage(PAGES[1], true, -1, 'left'),
   ]);
 })();
